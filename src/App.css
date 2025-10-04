@@ -1,0 +1,15 @@
+/* Custom animations that extend Tailwind */
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Additional utility classes if needed */
+.border-3 {
+  border-width: 3px;
+}
