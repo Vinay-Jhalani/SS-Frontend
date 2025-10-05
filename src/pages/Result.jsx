@@ -41,17 +41,37 @@ const Result = () => {
 
   const downloadImage = async () => {
     try {
-      // If annotated image is available, download from Cloudinary
+      let imageUrl = null;
+      let filename = image.originalName;
+
+      // Determine which image URL to use
       if (image.annotatedImageUrl) {
+        imageUrl = image.annotatedImageUrl;
+        filename = `annotated-${image.originalName}`;
+      } else if (image.originalImageUrl) {
+        imageUrl = image.originalImageUrl;
+        filename = image.originalName;
+      }
+
+      if (imageUrl) {
+        // For Cloudinary URLs, fetch the image and force download
+        const response = await fetch(imageUrl);
+        if (!response.ok) throw new Error("Failed to fetch image");
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+
         const link = document.createElement("a");
-        link.href = image.annotatedImageUrl;
-        link.setAttribute("download", `annotated-${image.originalName}`);
-        link.setAttribute("target", "_blank");
+        link.href = url;
+        link.setAttribute("download", filename);
         document.body.appendChild(link);
         link.click();
         link.remove();
+
+        // Clean up the blob URL
+        window.URL.revokeObjectURL(url);
       } else {
-        // Fallback to original image
+        // Final fallback to API endpoint (for legacy images)
         const response = await apiService.getImageFile(id);
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement("a");
