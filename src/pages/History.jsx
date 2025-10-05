@@ -88,10 +88,10 @@ const History = () => {
     // Convert dates for API call
     const apiFilters = { ...newFilters };
     if (newFilters.from) {
-      apiFilters.from = new Date(newFilters.from + "T00:00:00").toISOString();
+      apiFilters.from = new Date(newFilters.from + "T00:00:00.000Z").toISOString();
     }
     if (newFilters.to) {
-      apiFilters.to = new Date(newFilters.to + "T23:59:59").toISOString();
+      apiFilters.to = new Date(newFilters.to + "T23:59:59.999Z").toISOString();
     }
 
     loadImages(apiFilters);
@@ -105,10 +105,10 @@ const History = () => {
     // Convert dates for API call
     const apiFilters = { ...newFilters };
     if (newFilters.from) {
-      apiFilters.from = new Date(newFilters.from + "T00:00:00").toISOString();
+      apiFilters.from = new Date(newFilters.from + "T00:00:00.000Z").toISOString();
     }
     if (newFilters.to) {
-      apiFilters.to = new Date(newFilters.to + "T23:59:59").toISOString();
+      apiFilters.to = new Date(newFilters.to + "T23:59:59.999Z").toISOString();
     }
 
     loadImages(apiFilters);
