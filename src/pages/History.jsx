@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { apiService } from "../services/api";
 import {
@@ -42,59 +42,67 @@ const History = () => {
     }
   };
 
-  const loadImages = useCallback(
-    async (newFilters = filters) => {
-      try {
-        setLoading(true);
-        const response = await apiService.getImages(newFilters);
+  const loadImages = async (providedFilters = null) => {
+    try {
+      setLoading(true);
 
-        setImages(response.data.items || []);
+      // Use provided filters or current filters, and always convert dates
+      const filtersToUse = providedFilters || filters;
 
-        // Use backend pagination data
-        setPagination({
-          currentPage: response.data.current_page || 1,
-          totalPages: response.data.total_pages || 1,
-          totalItems: response.data.total || 0,
-          hasMore: response.data.next_offset !== null,
-        });
-
-        setError("");
-      } catch (error) {
-        setError("Failed to load images");
-        console.error("Load images error:", error);
-        // Set default pagination on error
-        setPagination({
-          currentPage: 1,
-          totalPages: 1,
-          totalItems: 0,
-          hasMore: false,
-        });
-      } finally {
-        setLoading(false);
+      // Convert dates inline to avoid dependency issues
+      const apiFilters = { ...filtersToUse };
+      if (filtersToUse.from) {
+        const fromDate = new Date(filtersToUse.from + "T00:00:00");
+        apiFilters.from = fromDate.toISOString();
       }
-    },
-    [filters]
-  );
+      if (filtersToUse.to) {
+        const toDate = new Date(filtersToUse.to + "T23:59:59.999");
+        apiFilters.to = toDate.toISOString();
+      }
+
+      const response = await apiService.getImages(apiFilters);
+
+      setImages(response.data.items || []);
+
+      // Use backend pagination data
+      setPagination({
+        currentPage: response.data.current_page || 1,
+        totalPages: response.data.total_pages || 1,
+        totalItems: response.data.total || 0,
+        hasMore: response.data.next_offset !== null,
+      });
+
+      setError("");
+    } catch (error) {
+      setError("Failed to load images");
+      console.error("Load images error:", error);
+      // Set default pagination on error
+      setPagination({
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0,
+        hasMore: false,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    loadLabels();
-    loadImages();
-  }, [loadImages]);
+    const initializeData = async () => {
+      await loadLabels();
+      await loadImages();
+    };
+    initializeData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value, offset: 0 };
     setFilters(newFilters);
 
-    // Convert dates for API call
-    const apiFilters = { ...newFilters };
-    if (newFilters.from) {
-      apiFilters.from = new Date(newFilters.from + "T00:00:00.000Z").toISOString();
-    }
-    if (newFilters.to) {
-      apiFilters.to = new Date(newFilters.to + "T23:59:59.999Z").toISOString();
-    }
-
-    loadImages(apiFilters);
+    // Load images with new filters (date conversion happens inside loadImages)
+    loadImages(newFilters);
   };
 
   const handlePageChange = (page) => {
@@ -102,16 +110,8 @@ const History = () => {
     const newFilters = { ...filters, offset: newOffset };
     setFilters(newFilters);
 
-    // Convert dates for API call
-    const apiFilters = { ...newFilters };
-    if (newFilters.from) {
-      apiFilters.from = new Date(newFilters.from + "T00:00:00.000Z").toISOString();
-    }
-    if (newFilters.to) {
-      apiFilters.to = new Date(newFilters.to + "T23:59:59.999Z").toISOString();
-    }
-
-    loadImages(apiFilters);
+    // Load images with new filters (date conversion happens inside loadImages)
+    loadImages(newFilters);
 
     // Scroll to top of page
     window.scrollTo({ top: 0, behavior: "smooth" });
