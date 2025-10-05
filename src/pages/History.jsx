@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { apiService } from "../services/api";
 import {
@@ -33,11 +33,6 @@ const History = () => {
     hasMore: false,
   });
 
-  useEffect(() => {
-    loadLabels();
-    loadImages();
-  }, []);
-
   const loadLabels = async () => {
     try {
       const response = await apiService.getLabels();
@@ -47,36 +42,44 @@ const History = () => {
     }
   };
 
-  const loadImages = async (newFilters = filters) => {
-    try {
-      setLoading(true);
-      const response = await apiService.getImages(newFilters);
+  const loadImages = useCallback(
+    async (newFilters = filters) => {
+      try {
+        setLoading(true);
+        const response = await apiService.getImages(newFilters);
 
-      setImages(response.data.items || []);
+        setImages(response.data.items || []);
 
-      // Use backend pagination data
-      setPagination({
-        currentPage: response.data.current_page || 1,
-        totalPages: response.data.total_pages || 1,
-        totalItems: response.data.total || 0,
-        hasMore: response.data.next_offset !== null,
-      });
+        // Use backend pagination data
+        setPagination({
+          currentPage: response.data.current_page || 1,
+          totalPages: response.data.total_pages || 1,
+          totalItems: response.data.total || 0,
+          hasMore: response.data.next_offset !== null,
+        });
 
-      setError("");
-    } catch (error) {
-      setError("Failed to load images");
-      console.error("Load images error:", error);
-      // Set default pagination on error
-      setPagination({
-        currentPage: 1,
-        totalPages: 1,
-        totalItems: 0,
-        hasMore: false,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+        setError("");
+      } catch (error) {
+        setError("Failed to load images");
+        console.error("Load images error:", error);
+        // Set default pagination on error
+        setPagination({
+          currentPage: 1,
+          totalPages: 1,
+          totalItems: 0,
+          hasMore: false,
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters]
+  );
+
+  useEffect(() => {
+    loadLabels();
+    loadImages();
+  }, [loadImages]);
 
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value, offset: 0 };
@@ -310,54 +313,57 @@ const History = () => {
             key={image._id}
             className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden transition-all duration-300 hover:transform hover:-translate-y-2 hover:shadow-xl"
           >
-            <div className="relative h-48 overflow-hidden bg-gray-100">
-              <img
-                src={apiService.getAnnotatedImageUrl(image)}
-                alt={image.originalName}
-                loading="lazy"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  // If first URL fails, try original image URL
-                  if (
-                    image.originalImageUrl &&
-                    e.target.src !== image.originalImageUrl
-                  ) {
-                    e.target.src = image.originalImageUrl;
-                  }
-                }}
-              />
-              {image.annotatedImageUrl && (
-                <div className="absolute top-2 right-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white px-2 py-1 rounded-xl text-xs font-semibold shadow-lg">
-                  ✨ PPE Detected
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 space-y-3">
-              <h3 className="font-semibold text-gray-800 text-sm truncate">
-                {image.originalName}
-              </h3>
-              <p className="text-xs text-gray-500 font-medium">
-                {new Date(image.createdAt).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
-              </p>
-
-              <div className="flex flex-wrap gap-1">
-                {image.detections.map((detection, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium"
-                  >
-                    <Tag size={10} />
-                    {detection.label} ({(detection.confidence * 100).toFixed(0)}
-                    %)
-                  </span>
-                ))}
+            <Link to={`/result/${image._id}`} className="block cursor-pointer">
+              <div className="relative h-48 overflow-hidden bg-gray-100">
+                <img
+                  src={apiService.getAnnotatedImageUrl(image)}
+                  alt={image.originalName}
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // If first URL fails, try original image URL
+                    if (
+                      image.originalImageUrl &&
+                      e.target.src !== image.originalImageUrl
+                    ) {
+                      e.target.src = image.originalImageUrl;
+                    }
+                  }}
+                />
+                {image.annotatedImageUrl && (
+                  <div className="absolute top-2 right-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white px-2 py-1 rounded-xl text-xs font-semibold shadow-lg">
+                    ✨ PPE Detected
+                  </div>
+                )}
               </div>
-            </div>
+
+              <div className="p-4 space-y-3">
+                <h3 className="font-semibold text-gray-800 text-sm truncate">
+                  {image.originalName}
+                </h3>
+                <p className="text-xs text-gray-500 font-medium">
+                  {new Date(image.createdAt).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </p>
+
+                <div className="flex flex-wrap gap-1">
+                  {image.detections.map((detection, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium"
+                    >
+                      <Tag size={10} />
+                      {detection.label} (
+                      {(detection.confidence * 100).toFixed(0)}
+                      %)
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </Link>
 
             <div className="flex border-t border-gray-100">
               <Link
@@ -368,7 +374,11 @@ const History = () => {
                 View
               </Link>
               <button
-                onClick={() => deleteImage(image._id)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  deleteImage(image._id);
+                }}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors duration-200 font-medium text-sm"
               >
                 <Trash2 size={16} />
