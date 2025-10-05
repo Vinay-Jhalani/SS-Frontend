@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiService } from "../services/api";
 import {
@@ -17,6 +17,30 @@ const Upload = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const navigate = useNavigate();
+  const errorRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Function to scroll to error message and show alert
+  const showError = useCallback((errorMessage) => {
+    setError(errorMessage);
+    // Show alert for immediate attention
+    alert("Error: " + errorMessage);
+    // Scroll to top to show error message
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      if (errorRef.current) {
+        errorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 100);
+  }, []);
+
+  // Function to show success message and scroll to top
+  const showSuccess = useCallback((successMessage) => {
+    setSuccess(successMessage);
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 100);
+  }, []);
 
   const handleDrag = useCallback((e) => {
     e.preventDefault();
@@ -42,51 +66,63 @@ const Upload = () => {
     return null;
   };
 
-  const handleFiles = useCallback((selectedFiles) => {
-    setError("");
-    setSuccess("");
+  const handleFiles = useCallback(
+    (selectedFiles) => {
+      setError("");
+      setSuccess("");
 
-    const validFiles = [];
-    const errors = [];
+      const validFiles = [];
+      const errors = [];
 
-    selectedFiles.forEach((file) => {
-      const error = validateFile(file);
-      if (error) {
-        errors.push(`${file.name}: ${error}`);
-      } else {
-        validFiles.push({
-          file,
-          id: `${file.name}-${file.size}-${file.lastModified}`,
-          preview: null,
-          uploaded: false,
-          error: null,
-        });
+      // Check if adding these files would exceed the 10 file limit
+      const totalFiles = files.length + selectedFiles.length;
+      if (totalFiles > 10) {
+        showError(
+          `You can upload a maximum of 10 images at once. You currently have ${files.length} images selected and tried to add ${selectedFiles.length} more.`
+        );
+        return;
       }
-    });
 
-    if (errors.length > 0) {
-      setError(errors.join(", "));
-      return;
-    }
+      selectedFiles.forEach((file) => {
+        const error = validateFile(file);
+        if (error) {
+          errors.push(`${file.name}: ${error}`);
+        } else {
+          validFiles.push({
+            file,
+            id: `${file.name}-${file.size}-${file.lastModified}`,
+            preview: null,
+            uploaded: false,
+            error: null,
+          });
+        }
+      });
 
-    // Create previews for valid files
-    validFiles.forEach((fileObj) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setFiles((prev) => {
-          const updated = [...prev];
-          const existingIndex = updated.findIndex((f) => f.id === fileObj.id);
-          if (existingIndex >= 0) {
-            updated[existingIndex].preview = e.target.result;
-          }
-          return updated;
-        });
-      };
-      reader.readAsDataURL(fileObj.file);
-    });
+      if (errors.length > 0) {
+        showError(errors.join(", "));
+        return;
+      }
 
-    setFiles((prev) => [...prev, ...validFiles]);
-  }, []);
+      // Create previews for valid files
+      validFiles.forEach((fileObj) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setFiles((prev) => {
+            const updated = [...prev];
+            const existingIndex = updated.findIndex((f) => f.id === fileObj.id);
+            if (existingIndex >= 0) {
+              updated[existingIndex].preview = e.target.result;
+            }
+            return updated;
+          });
+        };
+        reader.readAsDataURL(fileObj.file);
+      });
+
+      setFiles((prev) => [...prev, ...validFiles]);
+    },
+    [files, showError]
+  );
 
   const handleDrop = useCallback(
     (e) => {
@@ -104,6 +140,8 @@ const Upload = () => {
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       handleFiles(Array.from(e.target.files));
+      // Reset input value to allow re-selection of same files
+      e.target.value = "";
     }
   };
 
@@ -118,11 +156,22 @@ const Upload = () => {
     setError("");
     setSuccess("");
     setUploadProgress({});
+    // Reset file input value to allow re-selection of same files
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleUpload = async () => {
     if (files.length === 0) {
-      setError("Please select at least one file to upload");
+      showError("Please select at least one file to upload");
+      return;
+    }
+
+    if (files.length > 10) {
+      showError(
+        "You can upload a maximum of 10 images at once. Please remove some files."
+      );
       return;
     }
 
@@ -166,17 +215,17 @@ const Upload = () => {
 
         // Ensure we have a valid id before navigating
         if (responseData && responseData.id) {
-          setSuccess("Image uploaded and analyzed successfully!");
+          showSuccess("Image uploaded and analyzed successfully!");
           setTimeout(() => {
             navigate(`/result/${responseData.id}`);
           }, 1500);
         } else if (responseData?.existing && responseData?.id) {
-          setSuccess("Image already processed. Redirecting to result...");
+          showSuccess("Image already processed. Redirecting to result...");
           setTimeout(() => {
             navigate(`/result/${responseData.id}`);
           }, 1200);
         } else {
-          setError("Upload succeeded but no result id was returned.");
+          showError("Upload succeeded but no result id was returned.");
         }
       } else {
         // Multiple files response format
@@ -219,15 +268,15 @@ const Upload = () => {
         const errorCount = errors ? errors.length : 0;
 
         if (successCount === files.length) {
-          setSuccess(
+          showSuccess(
             `All ${successCount} images uploaded and analyzed successfully!`
           );
         } else if (successCount > 0) {
-          setSuccess(
+          showSuccess(
             `${successCount} images uploaded successfully. ${errorCount} failed.`
           );
         } else {
-          setError("All uploads failed. Please try again.");
+          showError("All uploads failed. Please try again.");
         }
 
         // Navigate to history page for batch uploads
@@ -248,7 +297,7 @@ const Upload = () => {
       setUploadProgress(errorProgress);
 
       const serverMsg = error?.response?.data?.error?.message;
-      setError(serverMsg || "Failed to upload images. Please try again.");
+      showError(serverMsg || "Failed to upload images. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -257,15 +306,49 @@ const Upload = () => {
   return (
     <div className="w-full max-w-none mx-0 flex flex-col gap-8">
       {error && (
-        <div className="flex items-center gap-4 p-6 rounded-2xl mb-6 font-medium text-lg shadow-lg backdrop-blur-lg bg-gradient-to-r from-red-50 to-red-100 text-red-600 border-2 border-red-200">
-          <AlertCircle size={20} />
-          {error}
+        <div
+          ref={errorRef}
+          className="flex items-center justify-between gap-4 p-6 rounded-2xl mb-6 font-medium text-lg shadow-lg backdrop-blur-lg bg-gradient-to-r from-red-50 to-red-100 text-red-600 border-2 border-red-200 animate-pulse"
+          style={{
+            position: "sticky",
+            top: "10px",
+            zIndex: 1000,
+            animation: "pulse 2s infinite",
+          }}
+        >
+          <div className="flex items-center gap-4">
+            <AlertCircle size={24} className="animate-bounce" />
+            <span className="font-semibold">{error}</span>
+          </div>
+          <button
+            onClick={() => setError("")}
+            className="ml-4 p-1 hover:bg-red-200 rounded-full transition-colors duration-200 flex-shrink-0"
+            aria-label="Dismiss error"
+          >
+            <X size={20} />
+          </button>
         </div>
       )}
       {success && (
-        <div className="flex items-center gap-4 p-6 rounded-2xl mb-6 font-medium text-lg shadow-lg backdrop-blur-lg bg-gradient-to-r from-green-50 to-green-100 text-green-600 border-2 border-green-200">
-          <CheckCircle size={20} />
-          {success}
+        <div
+          className="flex items-center justify-between gap-4 p-6 rounded-2xl mb-6 font-medium text-lg shadow-lg backdrop-blur-lg bg-gradient-to-r from-green-50 to-green-100 text-green-600 border-2 border-green-200"
+          style={{
+            position: "sticky",
+            top: "10px",
+            zIndex: 1000,
+          }}
+        >
+          <div className="flex items-center gap-4">
+            <CheckCircle size={24} />
+            <span className="font-semibold">{success}</span>
+          </div>
+          <button
+            onClick={() => setSuccess("")}
+            className="ml-4 p-1 hover:bg-green-200 rounded-full transition-colors duration-200 flex-shrink-0"
+            aria-label="Dismiss success message"
+          >
+            <X size={20} />
+          </button>
         </div>
       )}
 
@@ -296,6 +379,7 @@ const Upload = () => {
             <p className="text-lg text-gray-600">or</p>
             <label className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl cursor-pointer transition-all duration-300 font-semibold text-lg shadow-lg hover:from-blue-700 hover:to-blue-800 hover:transform hover:-translate-y-1 hover:shadow-xl">
               <input
+                ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 multiple
@@ -307,7 +391,9 @@ const Upload = () => {
             <div className="text-gray-500 text-sm font-medium">
               <p>Supported formats: JPEG, PNG, WebP</p>
               <p>Maximum size: 10MB per file</p>
-              <p>Supports Maximum 10 file uploads at a time.</p>
+              <p className="text-blue-600 font-semibold">
+                Maximum 10 images per upload
+              </p>
             </div>
           </div>
         </div>
@@ -316,7 +402,7 @@ const Upload = () => {
           <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-200 mt-8">
             <div className="flex justify-between items-center p-6 bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-gray-200">
               <h3 className="text-gray-800 text-xl font-semibold">
-                Selected Images ({files.length})
+                Selected Images ({files.length}/10)
               </h3>
               <button
                 onClick={clearAllFiles}
